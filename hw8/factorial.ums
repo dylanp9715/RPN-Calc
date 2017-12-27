@@ -1,0 +1,27 @@
+.section init
+ .zero r0
+ .temp r6,r7
+
+r3 := input()
+
+fact:
+push r1 on stack r2 // save return address
+push r3 on stack r2 // save nonvolatile register
+r3 := m[r0][r2 + 2] // first parameter 'n'
+// Handle base case: if n == 0
+
+if (r3 == 0) goto base_case
+// recursive call
+r5 := r3 - 1 // OK to step on volatile register
+push r5 on stack r2 // now (n - 1) is a paraemter
+goto fact linking r1 // make the recursive call
+pop stack r2 // pop parameter
+r1 := r3 * r1 // n * fact(n-1)
+goto finish_fact
+
+base_case:
+r1 := 1
+finish_fact: // What are invariants here?
+pop r3 off stack r2 // restore saved register
+pop r5 off stack r2 // put return address in r5
+goto r5 

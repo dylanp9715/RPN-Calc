@@ -1,0 +1,17 @@
+.zero r0
+.temps r6, r7
+
+// Allocate enough space in memory for the value stack
+.section data
+.space 100000
+end_valuestack:
+
+// Allocate enough space in memory for the call stack
+.space 100000
+end_callstack:
+
+.section init
+// Set r2 to the end of the call stack, and r4 to the end of the
+// value stack
+r2 := end_callstack
+r4 := end_valuestack

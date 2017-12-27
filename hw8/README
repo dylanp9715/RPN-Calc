@@ -1,0 +1,16 @@
+Dylan Park and Derek Sims
+
+We received help from TA Chris Phifer on this assignment.
+
+Everything should be correctly implemented.
+
+In our implementation, r0 is always 0, r1 holds return addresses for 
+procedures, r2 points to the callstack, r3 and r5 are nonvolatile registers,
+r4 points to the valuestack, and r6 and r7 are temporary registers.
+
+We implemented our print module by iterating through all of the elements of the
+valuestack, and recursively printing the digits of each number from least to 
+most significant.
+
+We spend around 10 analyzing the assignment, 4 hours writing assembly code, and
+three hours debugging.

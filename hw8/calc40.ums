@@ -1,0 +1,297 @@
+.zero r0
+.temps r6, r7
+
+.section rodata
+jumptable:
+	.space 256
+
+.section init
+
+// Recursively initialize the jumptable with r5 acting as the counter
+initialize_jumptable:
+	if (r5 == 256) goto create_table using r3
+	r5 := jumptable + r5
+	m[r0][r5] := input_error
+	r5 := r5 - jumptable
+	r5 := r5 + 1
+	goto initialize_jumptable
+
+// Create the jump table
+create_table:
+m[r0][jumptable + '0'] := digit
+m[r0][jumptable + '1'] := digit
+m[r0][jumptable + '2'] := digit
+m[r0][jumptable + '3'] := digit
+m[r0][jumptable + '4'] := digit
+m[r0][jumptable + '5'] := digit
+m[r0][jumptable + '6'] := digit
+m[r0][jumptable + '7'] := digit
+m[r0][jumptable + '8'] := digit
+m[r0][jumptable + '9'] := digit
+m[r0][jumptable + ' '] := waiting
+m[r0][jumptable + '\n'] := print
+m[r0][jumptable + '+'] := add
+m[r0][jumptable + '-'] := subtract
+m[r0][jumptable + '*'] := multiply
+m[r0][jumptable + '/'] := divide
+m[r0][jumptable + '|'] := or
+m[r0][jumptable + '&'] := and
+m[r0][jumptable + 'c'] := change
+m[r0][jumptable + '~'] := com
+m[r0][jumptable + 's'] := swap
+m[r0][jumptable + 'd'] := duplicate
+m[r0][jumptable + 'p'] := popStack
+m[r0][jumptable + 'z'] := remValStack
+
+.section text
+
+// Print error message if the input is not valid
+input_error:
+	output "Unknown character '"
+	output r3
+	output "'\n"
+	goto waiting
+
+// Place return value on call stack and go to the waiting function to retrieve
+// input
+main:
+	push r1 on stack r2
+	goto waiting
+
+// Retrieves input, places it in r3, and goes to perform op to determine which
+// operation to perform
+waiting:
+	r3 := input()
+	goto perform_op
+
+// Determines based on input in r3 and go to that function
+perform_op:
+	if (r3 == -1) goto end_program using r5
+	if (r3 == 4) goto end_program using r5
+	r5 := jumptable + r3
+	r5 := m[r0][r5]
+	goto r5
+
+// Place input found in r3 on to value stack
+digit:
+	r3 := r3 - '0'
+	push r3 on stack r4
+	goto entering
+
+// Gets the next input and places it in r3. If it is not a digit, go back to
+// perform op. If it is, that means this is a multi-digit number so perform
+// calculations to get number in r5 and push on to the stack
+entering:
+	r3 := input()
+	if (r3 <s '0') goto perform_op using r5
+	if (r3 >s '9') goto perform_op using r5
+	pop r5 off stack r4
+	r5 := r5 * 10
+	r3 := r3 - '0'
+	r5 := r5 + r3
+	push r5 on stack r4
+	goto entering
+
+// Places element back on value stack r4 from the call stack r2 after being 
+// popped off in the case that there is only one element
+one_element:
+	pop r5 off stack r2
+	push r5 on stack r4
+	goto print_error2
+
+// Print error message if there is not one element on value stack r4
+print_error1:
+	output "Stack underflow---expected at least 1 element\n"
+	goto waiting
+
+// Print error message if there are not 2 elements on value stack r4
+print_error2:
+	output "Stack underflow---expected at least 2 elements\n"
+	goto waiting
+
+// Check if there is one element on value stack r4
+check_element:
+	if (r4 == end_valuestack) goto print_error1 using r3
+	goto r1
+
+// Check if there are two elements on value stack
+check_two_elements:
+	if (r4 == end_valuestack) goto print_error2 using r3
+	pop r5 off stack r4
+	push r5 on stack r2
+	if (r4 == end_valuestack) goto one_element using r3
+	pop r5 off stack r2
+	push r5 on stack r4
+	goto r1
+
+// Pop r3 off of value stack r4, pop r5 off value stack r4, place the sum of 
+// r3 and r5 into r5, and place sum back on value stack r4. Finish by going
+// back to waiting to get the next input.
+add:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	r5 := r5 + r3
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack r4, pop r5 off value stack r4, place the 
+// difference between r3 and r5 into r5, and place difference back on value 
+// stack r4. Finish by going back to waiting to get the next input.
+subtract:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	r5 := r5 - r3
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack r4, pop r5 off value stack r4, place the product
+// of r3 and r5 into r5, and place product back on value stack r4. Finish by 
+// going back to waiting to get the next input.
+multiply:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	r5 := r5 * r3
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack r4, pop r5 off value stack r4, check if r3 or the 
+// denominator is zero or if either the numerator or denominator are negative.
+// Calls the appropriate functions if one of these conditions are fulfilled. 
+// Otherwise, just divides normally
+divide:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	if (r3 == 0) goto div_zero_error
+	if (r5 <s 0) goto neg_num_divide using r1
+	if (r3 <s 0) goto neg_denom_divide using r1
+	goto pos_divide
+
+// Called only if r5 or the numerator is negative. Checks if denominator is 
+// also negative in which case call neg_divide. Otherwise, negate r5, divide it
+// by r3, and then replace the negative sign before placing it back on the 
+// value stack r4
+neg_num_divide:
+	if (r3 <s 0) goto neg_divide using r1
+	r5 := -r5
+	r5 := r5 / r3
+	r5 := -r5
+	push r5 on stack r4
+	goto waiting
+
+// Called only if r3 or the denominator is negative. Checks if numerator is 
+// also negative in which case call neg_divide. Otherwise, negate r3, divide 
+// r5 by r3, and then replace the negative sign before placing it back on the 
+// value stack r4
+neg_denom_divide:
+	r3 := -r3
+	r5 := r5 / r3
+	r5 := -r5
+	push r5 on stack r4
+	goto waiting
+
+// Only called if both the r3 and r4 are negative. Negate both and then call 
+// the function that divides normally.
+neg_divide:
+	r5 := -r5
+	r3 := -r3
+	goto pos_divide
+
+// Divide r5 or the numerator by r3 or the denominator and place the result
+// into r5 before pushing r5 on to the value stack or r4. Finish by going to
+// waiting to retrieve the next input.
+pos_divide:
+	r5 := r5 / r3
+	push r5 on stack r4
+	goto waiting
+
+// Only called if r3 or the denominator is zero. Place both r5 and r3 back
+// on the value stack after being popped off. 
+div_zero_error:
+	output "Division by zero\n"
+	push r5 on stack r4
+	push r3 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack r4, pop r5 off value stack r4, performs the or
+// operation, places the result back in r5, and pushes this on to value stack.
+// Finishes by going to waiting to retrieve next input.
+or:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	r5 := r5 | r3
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack r4, pop r5 off value stack r4, performs the and
+// operation, places the result back in r5, and pushes this on to value stack.
+// Finishes by going to waiting to retrieve next input.
+and:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	r5 := r3 & r5
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack, negate it, and push this on to the value stack.
+// Finishes by going to waiting to retrieve next input.
+change:
+	goto check_element linking r1
+	pop r3 off stack r4
+	r3 := -r3
+	push r3 on stack r4
+	goto waiting
+
+// Pop r3 off of value stack, take complement of it, and push this on to the 
+// value stack. Finishes by going to waiting to retrieve next input.
+com:
+	goto check_element linking r1
+	pop r3 off stack r4
+	r3 := ~r3
+	push r3 on stack r4
+	goto waiting
+
+// Pop r3 off value stack then pop r5. Then push r3 back on to the value stack
+// followed by r5 in reverse order. Finishes by going to waiting to retrieve 
+// next input
+swap:
+	goto check_two_elements linking r1
+	pop r3 off stack r4
+	pop r5 off stack r4
+	push r3 on stack r4
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off of the value stack. Place this value into r5 and then push both
+// back on to the value stack. Finishes by going to waiting to retrieve 
+// next input
+duplicate:
+	goto check_element linking r1
+	pop r3 off stack r4
+	r5 := r3
+	push r3 on stack r4
+	push r5 on stack r4
+	goto waiting
+
+// Pop r3 off the value stack and then go to waiting to retrieve the next
+// input
+popStack:
+	goto check_element linking r1
+	pop r3 off stack r4
+	goto waiting
+
+// Recursively pop off the elements in the value stack by placing them into r3
+remValStack:
+	if (r4 == end_valuestack) goto waiting using r1
+	pop r3 off stack r4
+	goto remValStack
+
+// Pop the return value off of the call stack and go back to r1 or call main
+end_program:
+	pop r1 off stack r2
+	goto r1

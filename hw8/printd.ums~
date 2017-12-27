@@ -1,0 +1,98 @@
+.zero r0
+.temps r6, r7
+
+.section text
+
+// Push the pointer to the value stack onto the call stack so that we can use 
+// r4 without losing the pointer. Finally go to print_helper function.
+print:
+	push r4 on stack r2
+	r4 := r4 - 1 			// decrement r4 to allow print_helper to
+					// increment r4 as a counter to print 
+					// everything on value stack
+	goto print_helper
+
+// Pop the pointer to the value stack off of the call stack and then enter
+// waiting
+end_print:
+	pop r4 off stack r2
+	goto waiting
+
+// Uses r4 as a counter to go through and print everything in the value stack
+// Checks if r3 or the value to be outputted is zero, the most negative value,
+// or just regular positive and negative values and calls the necessary
+// functions to print the values.
+print_helper:
+	r4 := r4 + 1
+	if (r4 == end_valuestack) goto end_print using r1
+	r3 := m[r0][r4]
+	output ">>> "
+	r5 := 0x80000000
+	if (r3 == r5) goto print_special using r1
+	if (r3 == 0) goto print_zero
+	if (r3 >s 0) goto prep_print_pos using r1
+	if (r3 <s 0) goto print_neg using r1
+
+// Outputs the special, most negative value and goes back to print helper
+// to continue printing the values within the value stack
+print_special:
+	output "-2147483648"
+	output "\n"
+	goto print_helper
+
+// Outputs zero and goes back to print helper to continue printing the 
+// values within the value stack
+print_zero:
+	output "0"
+	output "\n"
+	goto print_helper
+
+// Pushes the value to be outputted on the call stack, goes to the print_pos
+// function, pops the value back off the call stack, and goes back to
+// print helper to continue printing the values within the value stack
+prep_print_pos:
+	push r3 on stack r2
+	goto print_pos linking r1
+	output "\n"
+	pop r3 off stack r2
+	goto print_helper
+
+// Prints positive numbers recursively
+print_pos:
+	push r1 on stack r2			// save return address
+	push r3 on stack r2			// save non-volatile register
+	r3 := m[r0][r2 + 2]			// get parameter
+
+	if (r3 <s 10) goto base_case using r1
+
+	r5 := r3 mod 10				// put least significant digit on call stack
+	push r5 on stack r2
+
+	r3 := r3 / 10				// put remaining number without lsd on call 
+	push r3 on stack r2				// stack as parameter to recursive call
+	goto print_pos linking r1	// call recursive function
+	pop stack r2				// get rid of previous function parameter
+	pop r5 off stack r2			// get the most recently pushed lsd
+	r5 := r5 + '0'			    
+	output r5 					// print it out
+	goto finish_print		
+
+// Only called if the value to be outputted is less than 10. Simply outputs
+// the value in register r3.
+base_case:
+	r3 := r3 + '0'
+	output r3
+
+// Finish printing and go back to whatever called this function pointed to
+// by r5
+finish_print:
+	pop r3 off stack r2 		// restore saved register 
+	pop r5 off stack r2			// put return address in r5
+	goto r5
+
+// Print negative numbers by simply outputting "-", negating the value in r3
+// and then calling the functions that print normal, positive numbers
+print_neg:
+	output "-"
+	r3 := -r3					// make parameter positive
+	goto prep_print_pos
